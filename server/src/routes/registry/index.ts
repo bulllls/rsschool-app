@@ -1,16 +1,17 @@
 import Router from '@koa/router';
 import { BAD_REQUEST, NOT_FOUND, OK } from 'http-status-codes';
-import { getRepository } from 'typeorm';
+import { getCustomRepository, getRepository } from 'typeorm';
 import { parseAsync } from 'json2csv';
 import { ILogger } from '../../logger';
 import { Course, Mentor, MentorRegistry, Registry, Student, User } from '../../models';
-import { IUserSession } from '../../models/session';
+import { IUserSession } from '../../models';
 import { getUserByGithubId } from '../../services/user.service';
 import { updateSession } from '../../session';
 import { createGetRoute } from '../common';
-import { adminGuard } from '../guards';
+import { adminGuard, anyCourseManagerGuard } from '../guards';
 import { setResponse, setCsvResponse } from '../utils';
 import { notificationService } from '../../services';
+import { MentorRegistryRepository } from '../../repositories/mentorRegistry';
 
 interface LoggingError {
   logger?: ILogger;
@@ -78,7 +79,7 @@ export function registryRouter(logger?: ILogger) {
     setResponse(ctx, OK);
   });
 
-  router.put('/mentor/:githubId', adminGuard, async (ctx: Router.RouterContext) => {
+  router.put('/mentor/:githubId', anyCourseManagerGuard, async (ctx: Router.RouterContext) => {
     const githubId = ctx.params.githubId;
 
     const { preselectedCourses } = ctx.request.body;
@@ -112,16 +113,30 @@ export function registryRouter(logger?: ILogger) {
     setResponse(ctx, OK, result);
   });
 
-  router.get('/mentors', adminGuard, async (ctx: Router.RouterContext) => {
-    const mentorRegistries = await getMentorRegistries();
+  router.get('/mentors', anyCourseManagerGuard, async (ctx: Router.RouterContext) => {
+    const state = ctx.state!.user as IUserSession;
+    let mentorRegistries: Array<any> = [];
+    const repository = getCustomRepository(MentorRegistryRepository);
 
-    const data = mentorRegistries.map(transformMentorRegistry);
-    setResponse(ctx, OK, data);
+    if (state.isAdmin) {
+      mentorRegistries = await repository.findAllMentorRegistries();
+    } else {
+      const coursesRoles = state.coursesRoles;
+      if (coursesRoles) {
+        const coursesIds: Array<number> = [];
+        for (const [key, value] of Object.entries(coursesRoles)) {
+          value?.map(role => {
+            role === 'manager' && coursesIds.push(Number(key));
+          });
+        }
+        mentorRegistries = await repository.findMentorRegistriesByCoursesIds(coursesIds);
+      }
+    }
+    setResponse(ctx, OK, mentorRegistries);
   });
 
-  router.get('/mentors/csv', adminGuard, async (ctx: Router.RouterContext) => {
-    const mentorRegistries = await getMentorRegistries();
-    const data = mentorRegistries.map(transformMentorRegistry);
+  router.get('/mentors/csv', anyCourseManagerGuard, async (ctx: Router.RouterContext) => {
+    const data = await getCustomRepository(MentorRegistryRepository).findAllMentorRegistries();
     const courses = await getRepository(Course).find({ select: ['id', 'name'] });
 
     const csv = await parseAsync(
@@ -241,47 +256,4 @@ export function registryRouter(logger?: ILogger) {
   });
 
   return router;
-}
-
-async function getMentorRegistries() {
-  return await getRepository(MentorRegistry)
-    .createQueryBuilder('mentorRegistry')
-    .innerJoin('mentorRegistry.user', 'user')
-    .addSelect([
-      'user.id',
-      'user.firstName',
-      'user.lastName',
-      'user.githubId',
-      'user.primaryEmail',
-      'user.cityName',
-      'user.contactsEpamEmail',
-    ])
-    .leftJoin('user.mentors', 'mentor')
-    .leftJoin('user.students', 'student')
-    .leftJoin('student.certificate', 'certificate')
-    .addSelect(['mentor.id', 'mentor.courseId', 'student.id', 'certificate.id'])
-    .orderBy('"mentorRegistry"."updatedDate"', 'DESC')
-    .getMany();
-}
-
-function transformMentorRegistry(mentorRegistry: MentorRegistry) {
-  const user = mentorRegistry.user;
-  return {
-    id: mentorRegistry.id,
-    comment: mentorRegistry.comment,
-    englishMentoring: mentorRegistry.englishMentoring,
-    githubId: user.githubId,
-    primaryEmail: user.primaryEmail,
-    contactsEpamEmail: user.contactsEpamEmail,
-    cityName: user.cityName,
-    maxStudentsLimit: mentorRegistry.maxStudentsLimit,
-    name: `${user.firstName} ${user.lastName}`,
-    preferedCourses: mentorRegistry.preferedCourses?.map(id => Number(id)),
-    preselectedCourses: mentorRegistry.preselectedCourses?.map(id => Number(id)),
-    preferedStudentsLocation: mentorRegistry.preferedStudentsLocation,
-    technicalMentoring: mentorRegistry.technicalMentoring,
-    updatedDate: mentorRegistry.updatedDate,
-    courses: mentorRegistry.user.mentors?.map(m => m.courseId),
-    hasCertificate: mentorRegistry.user.students?.some(s => s.certificate?.id),
-  };
 }
