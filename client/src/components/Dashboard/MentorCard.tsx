@@ -16,7 +16,7 @@ interface MentorContact {
 type Contact = { name: string; value: string | undefined };
 
 type Props = {
-  data: (MentorBasic & MentorContact) | undefined;
+  mentor: (MentorBasic & MentorContact) | undefined;
 };
 
 export function MentorCard(props: Props) {
@@ -30,7 +30,7 @@ export function MentorCard(props: Props) {
     contactsNotes,
     cityName,
     countryName,
-  } = props.data ?? {};
+  } = props.mentor ?? {};
 
   const contacts = [
     {
@@ -62,7 +62,7 @@ export function MentorCard(props: Props) {
       title="Mentor"
       icon={<TeamOutlined />}
       content={
-        props.data ? (
+        props.mentor ? (
           <div style={{ display: 'flex', justifyContent: 'space-around' }}>
             <div>
               <GithubAvatar size={48} githubId={githubId!} style={{ margin: '0 auto 10px', display: 'block' }} />

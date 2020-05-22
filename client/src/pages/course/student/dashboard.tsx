@@ -1,92 +1,48 @@
-import {
-  message,
-  //  Card, Row, Col, Statistic,
-  //  Typography,
-  // Popover,
-  Result,
-} from 'antd';
+import { message, Result } from 'antd';
 import moment from 'moment';
-// import { QuestionCircleOutlined } from '@ant-design/icons';
-import {
-  // GithubUserLink,
-  PageLayout,
-  LoadingScreen,
-} from 'components';
-import withCourseData from 'components/withCourseData';
-import withSession from 'components/withSession';
-import { useMemo, useState } from 'react';
-import { useAsync } from 'react-use';
-import { CourseService, StudentSummary, CourseTask } from 'services/course';
-import { CoursePageProps } from 'services/models';
-// import { dateTimeRenderer } from 'components/Table/renderers';
 import Masonry from 'react-masonry-css';
 import css from 'styled-jsx/css';
-import { StatsCard } from 'components/Dashboard/StatsCard';
-import { MentorCard } from 'components/Dashboard/MentorCard';
-import { TasksStatsCard } from 'components/Dashboard/TasksStatsCard';
+import { useAsync } from 'react-use';
+import { useMemo, useState } from 'react';
+
+import { PageLayout, LoadingScreen } from 'components';
+import withCourseData from 'components/withCourseData';
+import withSession from 'components/withSession';
+import { CourseService, StudentSummary, CourseTask } from 'services/course';
+import { CoursePageProps } from 'services/models';
+import { UserService } from 'services/user';
+import { StudentTasksDetail } from '../../../../../common/models';
+import { MainStatsCard, MentorCard, TasksStatsCard } from 'components/Dashboard';
 
 function Page(props: CoursePageProps) {
+  const { githubId } = props.session;
+  const { fullName } = props.course;
+
   const courseService = useMemo(() => new CourseService(props.course.id), [props.course.id]);
+  const userService = useMemo(() => new UserService(), [props.course.id]);
+
   const [studentSummary, setStudentSummary] = useState({} as StudentSummary);
   const [courseTasks, setCourseTasks] = useState([] as CourseTask[]);
+  const [tasksDetail, setTasksDetail] = useState([] as StudentTasksDetail[]);
   const [loading, setLoading] = useState(false);
-
-  // const renderContact = (label: string, value?: string) => {
-  //   if (!value) {
-  //     return null;
-  //   }
-  //   return (
-  //     <p>
-  //       <Typography.Text type="secondary">{label}:</Typography.Text> {value}
-  //     </p>
-  //   );
-  // };
 
   const checkTaskResults = (results: any[], taskId: number) =>
     results.find((task: any) => task.courseTaskId === taskId);
 
-  // const renderIconTaskInfo = (
-  //   scoreWeight: number | string = '',
-  //   taskEndDate: string | null,
-  //   taskStartDate: string | null,
-  // ) => (
-  //   <Popover
-  //     content={
-  //       <ul>
-  //         <li>Coefficient: {scoreWeight}</li>
-  //         <li>Start: {dateTimeRenderer(taskStartDate)}</li>
-  //         <li>Deadline: {dateTimeRenderer(taskEndDate)}</li>
-  //       </ul>
-  //     }
-  //     trigger="click"
-  //   >
-  //     <QuestionCircleOutlined title="Click for detatils" />
-  //   </Popover>
-  // );
-
-  // const renderTask = (task: CourseTask) => {
-  //   const { id, name, descriptionUrl, scoreWeight, studentEndDate, studentStartDate } = task;
-  //   return (
-  //     <div key={`task-id-${id}`}>
-  //       <Typography.Text strong>
-  //         <a target="_blank" className="link-user-profile" href={descriptionUrl ?? '#'}>
-  //           {name}
-  //         </a>
-  //       </Typography.Text>{' '}
-  //       {renderIconTaskInfo(scoreWeight, studentEndDate, studentStartDate)}
-  //     </div>
-  //   );
-  // };
-
   useAsync(async () => {
     try {
       setLoading(true);
-      const [studentSummary, courseTasks] = await Promise.all([
-        courseService.getStudentSummary('me'),
+      const [studentSummary, courseTasks, statisticsCourses] = await Promise.all([
+        courseService.getStudentSummary(githubId),
         courseService.getCourseTasks(),
+        userService.getProfileInfo(githubId),
       ]);
+      const tasksDetailCurrentCourse =
+        statisticsCourses.studentStats?.find(course => course.courseId === props.course.id)?.tasks ?? [];
+
       setStudentSummary(studentSummary);
       setCourseTasks(courseTasks);
+      setTasksDetail(tasksDetailCurrentCourse);
     } catch {
       message.error('An error occurred. Please try later.');
     } finally {
@@ -94,28 +50,48 @@ function Page(props: CoursePageProps) {
     }
   }, [props.course.id]);
 
-  // const { name, githubId, contactsEmail, contactsPhone, contactsSkype, contactsTelegram, contactsNotes } =
-  //   studentSummary.mentor ?? {};
   const currentDate = moment([2020, 2, 26]);
 
-  const tasksCompleted = courseTasks.filter(task => !!checkTaskResults(studentSummary.results, task.id));
-  const tasksNotDone = courseTasks.filter(
-    task =>
-      moment(task.studentEndDate as string).isBefore(currentDate, 'date') &&
-      !checkTaskResults(studentSummary.results, task.id),
-  );
-  const tasksFuture = courseTasks.filter(
-    task =>
-      moment(task.studentEndDate as string).isAfter(currentDate, 'date') &&
-      !checkTaskResults(studentSummary.results, task.id),
-  );
+  const maxCourseScore = courseTasks.reduce((score, task) => score + (task.maxScore ?? 0), 0);
+
+  const tasksCompleted = courseTasks
+    .filter(task => !!checkTaskResults(studentSummary.results, task.id))
+    .map(task => {
+      const { comment, taskGithubPrUris, score } = tasksDetail.find(taskDetail => taskDetail.name === task.name) ?? {};
+      return { ...task, comment, githubPrUri: taskGithubPrUris, score };
+    });
+  const tasksNotDone = courseTasks
+    .filter(
+      task =>
+        moment(task.studentEndDate as string).isBefore(currentDate, 'date') &&
+        !checkTaskResults(studentSummary.results, task.id),
+    )
+    .map(task => ({ ...task, comment: null, githubPrUri: null, score: 0 }));
+  const tasksFuture = courseTasks
+    .filter(
+      task =>
+        moment(task.studentEndDate as string).isAfter(currentDate, 'date') &&
+        !checkTaskResults(studentSummary.results, task.id),
+    )
+    .map(task => ({ ...task, comment: null, githubPrUri: null, score: null }));
 
   const taskStatistics = { completed: tasksCompleted, notDone: tasksNotDone, future: tasksFuture };
+  const courseProgress = Number((tasksCompleted.length / courseTasks.length * 100).toFixed(1));
+
+  const { isActive, totalScore } = studentSummary ?? {};
 
   const cards = [
-    studentSummary && <StatsCard data={studentSummary} />,
-    studentSummary?.mentor && <MentorCard data={studentSummary?.mentor} />,
-    courseTasks.length && <TasksStatsCard data={taskStatistics} />,
+    studentSummary && (
+      <MainStatsCard
+        isActive={isActive}
+        totalScore={totalScore}
+        position={356}
+        courseProgress={courseProgress}
+        maxCourseScore={maxCourseScore}
+      />
+    ),
+    studentSummary?.mentor && <MentorCard mentor={studentSummary?.mentor} />,
+    courseTasks.length && <TasksStatsCard tasks={taskStatistics} courseName={fullName} />,
   ];
 
   return (

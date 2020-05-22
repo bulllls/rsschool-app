@@ -1,13 +1,16 @@
 import * as React from 'react';
+import { useState } from 'react';
 import CommonCard from './CommonDashboardCard';
 import { AuditOutlined } from '@ant-design/icons';
 import { CourseTask } from 'services/course';
 import { Doughnut } from 'react-chartjs-2';
+import { StudentStats } from '../../../../common/models';
+import { TasksStatsModal } from './TasksStatsModal';
 
 export interface TasksStatistics {
-  completed: CourseTask[];
-  notDone: CourseTask[];
-  future: CourseTask[];
+  completed: (CourseTask | StudentStats)[];
+  notDone: (CourseTask | StudentStats)[];
+  future: (CourseTask | StudentStats)[];
 }
 
 export interface ITooltipItem {
@@ -19,38 +22,63 @@ export interface ITooltipItem {
   yLabel: number;
 }
 
-export interface ITooltipData<T> {
-  datasets: IChartsConfigDataDatasets<T>[];
+export interface ITooltipData {
+  datasets: IChartsConfigDataDatasets[];
   labels: string[];
 }
 
-interface IChartsConfigDataDatasets<T> {
-  data: T[];
-  ricData?: string[];
-  totData?: string[];
-  hoverBorderColor?: string;
-  hoverBorderWidth?: number;
-  backgroundColor?: string;
-  label?: string;
-  borderWidth?: number;
-  borderColor?: string;
-  borderAlign?: string;
+interface IChartsConfigDataDatasets {
+  data: number[];
+  backgroundColor?: string[];
+  hoverBackgroundColor?: string[];
+}
+
+enum GroupTaskName {
+  Completed = 'Completed',
+  NotCompleted = 'Not completed',
+  Future = 'Future',
 }
 
 type Props = {
-  data: TasksStatistics;
+  tasks: TasksStatistics;
+  courseName: string;
 };
 
 export function TasksStatsCard(props: Props) {
-  const {
-    data: { completed, notDone, future },
-  } = props;
-  const totalCountTasks = completed.length + notDone.length + future.length;
-  console.log(totalCountTasks);
+  const [isTasksStatsModalVisible, setTasksStatsModalVisible] = useState(false);
+  const [statisticsTableName, setStatisticsTableName] = useState('');
+  const [selectedGroupTasks, setCurrentTaskStatsModal] = useState([] as (CourseTask | StudentStats)[]);
 
-  function setChartTooltipOptions() {
+  const {
+    tasks: { completed, notDone, future },
+    courseName,
+  } = props;
+
+  const showTasksStatsModal = (chartLabel: string) => {
+    switch (chartLabel) {
+      case GroupTaskName.Completed:
+        setCurrentTaskStatsModal(completed);
+        setStatisticsTableName('Completed tasks');
+        break;
+      case GroupTaskName.Future:
+        setCurrentTaskStatsModal(future);
+        setStatisticsTableName('Tasks not completed');
+        break;
+      default:
+        setStatisticsTableName('Future tasks')
+        setCurrentTaskStatsModal(notDone);
+        break;
+    }
+    setTasksStatsModalVisible(true);
+  };
+
+  const hideTasksStatsModal = () => {
+    setTasksStatsModalVisible(false);
+  };
+
+  const setChartTooltipOptions = () => {
     return {
-      title(tooltipItems: ITooltipItem[], data: ITooltipData<number>) {
+      title(tooltipItems: ITooltipItem[], data: ITooltipData) {
         const index: number = tooltipItems[0].index;
         const label: string = data.labels[index].toLowerCase();
         const value: number = data.datasets[0].data[index];
@@ -63,10 +91,10 @@ export function TasksStatsCard(props: Props) {
         return ' Click to see details';
       },
     };
-  }
+  };
 
-  const data = {
-    labels: ['Completed', 'Not completed', 'Future'],
+  const dataForChart = {
+    labels: [GroupTaskName.Completed, GroupTaskName.NotCompleted, GroupTaskName.Future],
     datasets: [
       {
         data: [completed.length, notDone.length, future.length],
@@ -78,14 +106,6 @@ export function TasksStatsCard(props: Props) {
 
   const options = {
     cutoutPercentage: 20,
-    layout: {
-      padding: {
-        left: 0,
-        right: 0,
-        top: 0,
-        bottom: 10,
-      },
-    },
     legend: {
       labels: {
         fontSize: 14,
@@ -101,20 +121,29 @@ export function TasksStatsCard(props: Props) {
     },
     onClick: (_: any, chartItem: any) => {
       if (chartItem[0]) {
-        console.log(chartItem[0]._model.label);
+        showTasksStatsModal(chartItem[0]._model.label);
       }
     },
   };
 
   return (
-    <CommonCard
-      title="Tasks statistics Pie chart"
-      icon={<AuditOutlined />}
-      content={
-        <div>
-          <Doughnut data={data} options={options} />
-        </div>
-      }
-    />
+    <>
+      <TasksStatsModal
+        courseName={courseName}
+        tableName={statisticsTableName}
+        tasks={selectedGroupTasks}
+        isVisible={isTasksStatsModalVisible}
+        onHide={hideTasksStatsModal}
+      />
+      <CommonCard
+        title="Tasks statistics"
+        icon={<AuditOutlined />}
+        content={
+          <div>
+            <Doughnut data={dataForChart} options={options} />
+          </div>
+        }
+      />
+    </>
   );
 }
