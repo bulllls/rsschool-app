@@ -65,7 +65,7 @@ export function TasksStatsCard(props: Props) {
         setStatisticsTableName('Tasks not completed');
         break;
       default:
-        setStatisticsTableName('Future tasks')
+        setStatisticsTableName('Future tasks');
         setCurrentTaskStatsModal(notDone);
         break;
     }
@@ -139,8 +139,8 @@ export function TasksStatsCard(props: Props) {
         title="Tasks statistics"
         icon={<AuditOutlined />}
         content={
-          <div>
-            <Doughnut data={dataForChart} options={options} />
+          <div style={{ minHeight: 220, minWidth: 220, maxWidth: 300, margin: 'auto' }}>
+            <Doughnut width={50} height={50} data={dataForChart} options={options} />
           </div>
         }
       />

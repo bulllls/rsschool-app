@@ -8,38 +8,46 @@ import { useMemo, useState } from 'react';
 import { PageLayout, LoadingScreen } from 'components';
 import withCourseData from 'components/withCourseData';
 import withSession from 'components/withSession';
-import { CourseService, StudentSummary, CourseTask } from 'services/course';
+import { CourseService, StudentSummary, CourseTask, CourseEvent } from 'services/course';
 import { CoursePageProps } from 'services/models';
 import { UserService } from 'services/user';
 import { StudentTasksDetail } from '../../../../../common/models';
-import { MainStatsCard, MentorCard, TasksStatsCard } from 'components/Dashboard';
+import { MainStatsCard, MentorCard, TasksStatsCard, NextEventCard } from 'components/Dashboard';
 
 function Page(props: CoursePageProps) {
   const { githubId } = props.session;
   const { fullName } = props.course;
+  const mockPosition = 356;
 
   const courseService = useMemo(() => new CourseService(props.course.id), [props.course.id]);
   const userService = useMemo(() => new UserService(), [props.course.id]);
 
   const [studentSummary, setStudentSummary] = useState({} as StudentSummary);
-  const [courseTasks, setCourseTasks] = useState([] as CourseTask[]);
-  const [tasksDetail, setTasksDetail] = useState([] as StudentTasksDetail[]);
+  const [courseTasks, setCourseTasks] = useState<CourseTask[]>([]);
+  const [tasksDetail, setTasksDetail] = useState<StudentTasksDetail[]>([]);
+  const [nextEvent, setNextEvent] = useState({} as CourseEvent);
   const [loading, setLoading] = useState(false);
-
-  const checkTaskResults = (results: any[], taskId: number) =>
-    results.find((task: any) => task.courseTaskId === taskId);
 
   useAsync(async () => {
     try {
       setLoading(true);
-      const [studentSummary, courseTasks, statisticsCourses] = await Promise.all([
+
+      const [studentSummary, courseTasks, statisticsCourses, courseEvents] = await Promise.all([
         courseService.getStudentSummary(githubId),
         courseService.getCourseTasks(),
         userService.getProfileInfo(githubId),
+        courseService.getCourseEvents(),
       ]);
       const tasksDetailCurrentCourse =
         statisticsCourses.studentStats?.find(course => course.courseId === props.course.id)?.tasks ?? [];
+      const startOfToday = moment().startOf('day');
+      const nextEvent =
+        courseEvents
+          .concat(tasksToEvents(courseTasks))
+          .sort((a, b) => a.dateTime.localeCompare(b.dateTime))
+          .find(event => moment(event.dateTime).isAfter(startOfToday)) ?? ({} as CourseEvent);
 
+      setNextEvent(nextEvent);
       setStudentSummary(studentSummary);
       setCourseTasks(courseTasks);
       setTasksDetail(tasksDetailCurrentCourse);
@@ -76,8 +84,7 @@ function Page(props: CoursePageProps) {
     .map(task => ({ ...task, comment: null, githubPrUri: null, score: null }));
 
   const taskStatistics = { completed: tasksCompleted, notDone: tasksNotDone, future: tasksFuture };
-  const courseProgress = Number((tasksCompleted.length / courseTasks.length * 100).toFixed(1));
-
+  const courseProgress = Number(((tasksCompleted.length / courseTasks.length) * 100).toFixed(1));
   const { isActive, totalScore } = studentSummary ?? {};
 
   const cards = [
@@ -85,13 +92,14 @@ function Page(props: CoursePageProps) {
       <MainStatsCard
         isActive={isActive}
         totalScore={totalScore}
-        position={356}
+        position={mockPosition}
         courseProgress={courseProgress}
         maxCourseScore={maxCourseScore}
       />
     ),
     studentSummary?.mentor && <MentorCard mentor={studentSummary?.mentor} />,
     courseTasks.length && <TasksStatsCard tasks={taskStatistics} courseName={fullName} />,
+    <NextEventCard nextEvent={nextEvent} />,
   ];
 
   return (
@@ -147,5 +155,36 @@ const { className: masonryColumnClassName, styles: masonryColumnStyles } = css.r
     background-clip: padding-box;
   }
 `;
+
+const TaskTypes = {
+  deadline: 'deadline',
+  test: 'test',
+  newtask: 'newtask',
+  lecture: 'lecture',
+};
+
+const checkTaskResults = (results: any[], taskId: number) => results.find((task: any) => task.courseTaskId === taskId);
+
+const tasksToEvents = (tasks: CourseTask[]) => {
+  return tasks.reduce((acc: Array<CourseEvent>, task: CourseTask) => {
+    if (task.type !== TaskTypes.test) {
+      acc.push(createCourseEventFromTask(task, task.type));
+    }
+    acc.push(createCourseEventFromTask(task, task.type === TaskTypes.test ? TaskTypes.test : TaskTypes.deadline));
+    return acc;
+  }, []);
+};
+
+const createCourseEventFromTask = (task: CourseTask, type: string): CourseEvent => {
+  return {
+    id: task.id,
+    dateTime: (type === TaskTypes.deadline ? task.studentEndDate : task.studentStartDate) || '',
+    event: {
+      type: type,
+      name: task.name,
+      descriptionUrl: task.descriptionUrl,
+    },
+  } as CourseEvent;
+};
 
 export default withCourseData(withSession(Page));
