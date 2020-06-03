@@ -1,18 +1,18 @@
 import * as React from 'react';
-import { Typography, Row, Col, Progress } from 'antd';
+import { Typography, Row, Col } from 'antd';
 import CommonCard from './CommonDashboardCard';
 import { TrophyOutlined } from '@ant-design/icons';
+import GaugeChart from 'react-gauge-chart';
 
 type Props = {
   isActive: boolean;
   totalScore: number;
   position: number;
-  courseProgress: number;
   maxCourseScore: number;
 };
 
 export function MainStatsCard(props: Props) {
-  const { isActive, totalScore, position, courseProgress, maxCourseScore } = props;
+  const { isActive, totalScore, position, maxCourseScore } = props;
   const { Text } = Typography;
   return (
     <CommonCard
@@ -22,7 +22,7 @@ export function MainStatsCard(props: Props) {
         <div style={{ display: 'flex', justifyContent: 'space-around' }}>
           <Row>
             <Col style={{ marginBottom: 7, marginRight: 50 }}>
-              <Progress percent={courseProgress} type="circle" width={90} />
+            <GaugeChart id="gauge-chart1" />
             </Col>
             <Col>
               <p style={{ marginBottom: 7}}>

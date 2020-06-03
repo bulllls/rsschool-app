@@ -84,7 +84,6 @@ function Page(props: CoursePageProps) {
     .map(task => ({ ...task, comment: null, githubPrUri: null, score: null }));
 
   const taskStatistics = { completed: tasksCompleted, notDone: tasksNotDone, future: tasksFuture };
-  const courseProgress = Number(((tasksCompleted.length / courseTasks.length) * 100).toFixed(1));
   const { isActive, totalScore } = studentSummary ?? {};
 
   const cards = [
@@ -93,7 +92,6 @@ function Page(props: CoursePageProps) {
         isActive={isActive}
         totalScore={totalScore}
         position={mockPosition}
-        courseProgress={courseProgress}
         maxCourseScore={maxCourseScore}
       />
     ),
