@@ -14,19 +14,35 @@ type Props = {
 export function MainStatsCard(props: Props) {
   const { isActive, totalScore, position, maxCourseScore } = props;
   const { Text } = Typography;
+  const percentageTasksCompleted = maxCourseScore ? Number((totalScore / maxCourseScore).toFixed(2)) : 0;
+  const chartStyle = {
+    width: 120,
+  }
   return (
     <CommonCard
       title="Your stats"
       icon={<TrophyOutlined />}
       content={
-        <div style={{ display: 'flex', justifyContent: 'space-around' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', alignItems: 'center' }}>
           <Row>
-            <Col style={{ marginBottom: 7, marginRight: 50 }}>
-            <GaugeChart id="gauge-chart1" />
+            <Col style={{ marginBottom: 7, marginRight: 50, flexGrow: 1 }}>
+              <GaugeChart
+                id="gauge-chart"
+                percent={percentageTasksCompleted}
+                colors={['#EA4228', '#F5CD19', '#5BE12C']}
+                arcsLength={[0.2, 0.3, 0.5]}
+                hideText={true}
+                style={chartStyle}
+              />
             </Col>
+          </Row>
+          <Row>
             <Col>
-              <p style={{ marginBottom: 7}}>
-                Status: <Text style={{ color: isActive ? '#87d068' : '#ff5500' }} strong>{isActive ? 'Active' : 'Inactive'}</Text>
+              <p style={{ marginBottom: 7 }}>
+                Status:{' '}
+                <Text style={{ color: isActive ? '#87d068' : '#ff5500' }} strong>
+                  {isActive ? 'Active' : 'Inactive'}
+                </Text>
               </p>
               {position && (
                 <p style={{ marginBottom: 7 }}>

@@ -64,6 +64,19 @@ export function NextEventCard(props: Props) {
         Object.keys(nextEvent).length ? (
           <div style={{ display: 'flex', justifyContent: 'space-around' }}>
             <Row>
+              <Select
+                size={'small'}
+                style={{ width: 150, height: 25, marginBottom: 16 }}
+                placeholder="Please select a timezone"
+                defaultValue={timeZone}
+                onChange={setTimeZone}
+              >
+                {TIMEZONES.map(tz => (
+                  <Select.Option key={tz} value={tz}>
+                    {tz}
+                  </Select.Option>
+                ))}
+              </Select>
               <Col>
                 <p style={{ marginBottom: 7 }}>
                   Type:{' '}
@@ -123,19 +136,6 @@ export function NextEventCard(props: Props) {
               </Col>
             </Row>
             <Row justify="space-between" style={{ marginBottom: 16 }}>
-              <Select
-                size={'small'}
-                style={{ width: 150, height: 25 }}
-                placeholder="Please select a timezone"
-                defaultValue={timeZone}
-                onChange={setTimeZone}
-              >
-                {TIMEZONES.map(tz => (
-                  <Select.Option key={tz} value={tz}>
-                    {tz}
-                  </Select.Option>
-                ))}
-              </Select>
             </Row>
           </div>
         ) : (
